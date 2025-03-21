@@ -21,11 +21,15 @@ def rename_pictures(g_name, ext_type: int):
     print('Le répertoire courant est :', start_folder)
     print('Le répertoire courant contient les fichiers suivants :')
     print(all_files)
-    print('Est-ce le bon répertoire ?') # ---> replace with an input instruction
+    dir_ok = input('Est-ce le bon répertoire O/N (par défaut, O) ?')
+    if dir_ok.upper() == 'N':
+        exit(0)
+
     # find picture files using filters
     re_nef = re.compile(r".*\.nef$", re.IGNORECASE)     # nef filter
     re_jpg = re.compile(r".*\.jpe?g$", re.IGNORECASE)   # jpg filter
     filters = (re_nef, re_jpg)
+
     # store them
     pictures_file = []
     for file in all_files:
@@ -64,7 +68,7 @@ def rename_pictures(g_name, ext_type: int):
         original_ext = splitext(file1)[1].upper()
         fixed_part_2 = '_' + new_directory + original_ext
 
-    # 4. move picture files
+    # 5. move picture files
     count = 0
     for file in pictures_file:
         with open(file, 'rb') as img_file:
@@ -91,7 +95,7 @@ def rename_pictures(g_name, ext_type: int):
             print( count_str+".", file_to_be_moved, "-->", moved_file)
             os.replace(file_to_be_moved, moved_file )
 
-    # 5. cleaning
+    # 6. cleaning
     os.chdir("../")
     if os.listdir(directory):
          print(os.listdir(directory))
@@ -114,7 +118,7 @@ def suppress_spaces(string):
     return string
 
 def enter_group_name():
-    group_name = 'balade à Gaubert avec Francis et Martine' # ---> replace with input("Nom du groupe de photos : ")
+    group_name = input("Nom du groupe de photos : ")
     group_name = suppress_spaces(group_name).replace(" ", "-").lower()
     return group_name
 
@@ -131,9 +135,10 @@ def enter_type():
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    # enter parameters
     group_name = enter_group_name()
-    file_type =  0# ---> replace with a call to enter_type()
-
+    file_type =  enter_type()# ---> replace with a call to enter_type()
+    # move
     rename_pictures(group_name, file_type)
 
     exit(0)
