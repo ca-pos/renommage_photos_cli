@@ -71,29 +71,28 @@ def rename_pictures(g_name, ext_type: int):
     # 5. move picture files
     count = 0
     for file in pictures_file:
-        with open(file, 'rb') as img_file:
-            count += 1
-            count_str = str("{:03d}".format(count)) # index, part of the new name of the file (see below)
-            # original name
-            original_name = splitext(file)[0] # e.g. _DSC6502
-            # move files
-            file_to_be_moved = original_name + original_ext
-            # structure of the new name :
-            # fixed part 1
-            #       (yyyy-mm-dd)
-            #       underscore
-            # variable part
-            #       index (3 digits)
-            #       underscore
-            #       [original name] (between brackets, from the camera)
-            # fixed part 2
-            #       underscore
-            #       new directory (see above)
-            #       original extension (nef or jpg/jpeg)
-            new_name = fixed_part_1 + count_str + "_[" + original_name + "]" + fixed_part_2
-            moved_file = dest_folder + "/" + new_name
-            print( count_str+".", file_to_be_moved, "-->", moved_file)
-            os.replace(file_to_be_moved, moved_file )
+        count += 1
+        count_str = str("{:03d}".format(count)) # index, part of the new name of the file (see below)
+        # original name
+        original_name = splitext(file)[0] # e.g. _DSC6502
+        # move files
+        file_to_be_moved = original_name + original_ext
+        # structure of the new name :
+        # fixed part 1
+        #       (yyyy-mm-dd)
+        #       underscore
+        # variable part
+        #       index (3 digits)
+        #       underscore
+        #       [original name] (between brackets, from the camera)
+        # fixed part 2
+        #       underscore
+        #       new directory (see above)
+        #       original extension (nef or jpg/jpeg)
+        new_name = fixed_part_1 + count_str + "_[" + original_name + "]" + fixed_part_2
+        moved_file = dest_folder + "/" + new_name
+        print( count_str+".", file_to_be_moved, "-->", moved_file)
+        os.replace(file_to_be_moved, moved_file )
 
     # 6. cleaning
     os.chdir("../")
