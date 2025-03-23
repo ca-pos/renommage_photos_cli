@@ -1,8 +1,9 @@
 import os
-
-import exifread
+from sys import exit
 from os.path import basename, splitext, abspath
+
 import re
+import exifread
 
 from constants import *
 
