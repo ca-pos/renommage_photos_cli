@@ -7,7 +7,7 @@ import exifread
 
 from constants import *
 
-def rename_pictures(g_name, ext_type: int):
+def rename_pictures(g_name, modifier, ext_type: int):
     # program should be called from the directory where to-be-renamed pictures lie
 
     # folders structures : .../STEP 1/decade/compressed date/pictures to be renamed
@@ -47,8 +47,9 @@ def rename_pictures(g_name, ext_type: int):
     decade_step_2 = STEP_2 + '/' + decade
     os.makedirs(decade_step_2, exist_ok=True)
 
-    # 3. create destination directory in step 2 of the workflow (compressed date + name of the group of pictures)
-    directory = basename(start_folder) # compressed date
+    # 3. create destination directory in step 2 of the workflow
+    #    (compressed date + modifier + name of the group of pictures)
+    directory = basename(start_folder) + modifier # compressed date
     new_directory = directory + '-' + g_name
     dest_folder = decade_step_2 + '/' + new_directory
     os.makedirs(dest_folder, exist_ok=True)
@@ -133,13 +134,18 @@ def enter_type():
 
         return int(f_type)-1
 
+def enter_modifier():
+    return input('Lettre à ajouter (entrée si aucune) :')
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # enter parameters
     group_name = enter_group_name()
+    group_modifier = enter_modifier()
     file_type =  enter_type()# ---> replace with a call to enter_type()
     # move
-    rename_pictures(group_name, file_type)
+    rename_pictures(group_name, group_modifier, file_type)
 
     exit(0)
 
