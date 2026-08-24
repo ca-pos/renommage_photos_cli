@@ -1,35 +1,113 @@
 import os
 from sys import exit
+from pathlib import Path
 from os.path import basename, splitext, abspath
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import PathCompleter
 
 import re
 import exifread
 
 from constants import *
 
-def rename_pictures(g_name, modifier, ext_type: int):
-    # program should be called from the directory where to-be-renamed pictures lie
+def reject_filter(file):
+    """ directories to be rejected: 'lost+found' and any hidden ones"""
+    try:
+        file.index('lost+found')
+        return False
+    except ValueError:
+        pass
+    if file.startswith('./.'):
+        return False
+    
+    return True
 
-    # folders structures : .../STEP 1/decade/compressed date/pictures to be renamed
-    # program must be started from the to-be-renamed pictures directory
-    # possible extensions are NEF and JPG/JPEG
+def select_directory():
+    """select directory containing to-be-renamed pictures"""
+    images_home = IMAGES_HOME
+    dir_ok = 'N'
+    while not dir_ok.upper() == 'O':
+        os.chdir(images_home)
+        images_path = prompt(
+            "Répertoire : " + images_home,
+            completer=PathCompleter(only_directories=True,file_filter=reject_filter)
+        )
+        if images_path:
+            os.chdir(images_path)
+        else:
+            images_path = IMAGES_HOME
+        print('\n\033[0;34m Le répertoire contient les fichiers suivants :\033[00m')
+        print('-----------------------------------------------')
+        all_files = os.listdir()
+        all_files.sort()
+        for file in all_files:
+            print(file)
+        print('-----------------------------------------------')
+        dir_ok = input('Est-ce le bon répertoire O/N (par défaut, O) ? ')
+        if dir_ok == '':
+            dir_ok = 'O'
+    return images_path
 
-    searched_ext = ['NEF', 'JPG/JPEG'] [ext_type]
+def create_ext_filters():
+    """Creates filters for NEF and JP(E)G files. Returns a tuple of filters"""
+    re_nef_ext = re.compile(r".*\.nef$", re.IGNORECASE)     # nef filter
+    re_jpg_ext = re.compile(r".*\.jpe?g$", re.IGNORECASE)   # jpg filter
+    return {NEF_EXT:re_nef_ext, JPG_EXT:re_jpg_ext}
 
-    # 1. check directory
-    start_folder = abspath('.')
-    all_files = os.listdir(start_folder)
-    print('Le répertoire courant est :', start_folder)
-    print('Le répertoire courant contient les fichiers suivants :')
-    print(all_files)
-    dir_ok = input('Est-ce le bon répertoire O/N (par défaut, O) ?')
-    if dir_ok.upper() == 'N':
-        exit(0)
+def create_base_filters():
+    """Creates filters for original from camera names (base names)"""
+    re_nef_base = re.compile(r"(_?DSC_?\d{4})")     # Nikon
+    re_jpg_base_iphone = re.compile(r"(IMG_\d{4})") # iphone (SE 2020)
+    return {NEF_BASE: re_nef_base, JPG_BASE_IPHONE: re_jpg_base_iphone}
 
-    # find picture files using filters
-    re_nef = re.compile(r".*\.nef$", re.IGNORECASE)     # nef filter
-    re_jpg = re.compile(r".*\.jpe?g$", re.IGNORECASE)   # jpg filter
-    filters = (re_nef, re_jpg)
+def process_nef():
+    print('Traiter NEF')
+
+def process_jpg():
+    print('Traiter JPEG')
+
+def do_processing(filters):
+    processes = {NEF_EXT: process_nef, JPG_EXT: process_jpg}
+    """Figure out which types of pictures are presents"""
+    all_files = os.listdir('.')
+    all_files.sort()
+    flag = False
+    for file in all_files:
+        for index in range(len(filters)):
+            if bool(filters[EXT_LIST[index]].match(file)):
+                processes[EXT_LIST[index]]()
+                flag = True
+    if not flag:
+        print('\033[0;31m Le répertoire ne contient pas de fichiers images\033[00m')
+        exit(NO_PICTURE)
+
+    return
+
+def rename_pictures():
+    """
+    possible extensions are NEF and JPG/JPEG
+    """
+    select_directory()
+    ext_filters = create_ext_filters()
+    do_processing(ext_filters)
+
+    # (_?DSC_?\d{4}.*)\.((NEF)|(nef))$
+
+    return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # store them
     pictures_file = []
@@ -141,11 +219,11 @@ def enter_modifier():
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # enter parameters
-    group_name = enter_group_name()
-    group_modifier = enter_modifier()
-    file_type =  enter_type()# ---> replace with a call to enter_type()
+    # group_name = 'le_héron' #enter_group_name()
+    # group_modifier = enter_modifier()
+    # file_type =  enter_type()
     # move
-    rename_pictures(group_name, group_modifier, file_type)
+    rename_pictures()
 
     exit(0)
 
