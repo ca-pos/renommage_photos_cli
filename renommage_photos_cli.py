@@ -4,11 +4,13 @@ from pathlib import Path
 from os.path import basename, splitext, abspath
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import PathCompleter
+from typing import List
 
 import re
 import exifread
 
 from constants import *
+from set_colors import *
 
 def reject_filter(file):
     """ directories to be rejected: 'lost+found' and any hidden ones"""
@@ -19,7 +21,7 @@ def reject_filter(file):
         pass
     if file.startswith('./.'):
         return False
-    
+
     return True
 
 def select_directory():
@@ -36,14 +38,15 @@ def select_directory():
             os.chdir(images_path)
         else:
             images_path = IMAGES_HOME
-        print('\n\033[0;34m Le répertoire contient les fichiers suivants :\033[00m')
-        print('-----------------------------------------------')
+        print(PICTURE_LIST_MSG)
+        print('-'*46)
         all_files = os.listdir()
         all_files.sort()
         for file in all_files:
             print(file)
         print('-----------------------------------------------')
-        dir_ok = input('Est-ce le bon répertoire O/N (par défaut, O) ? ')
+        dir_ok = input(REP_OK_MSG)
+        print('-----------------------------------------------')
         if dir_ok == '':
             dir_ok = 'O'
     return images_path
@@ -56,27 +59,111 @@ def create_ext_filters():
 
 def create_base_filters():
     """Creates filters for original from camera names (base names)"""
-    re_nef_base = re.compile(r"(_?DSC_?\d{4})")     # Nikon
-    re_jpg_base_iphone = re.compile(r"(IMG_\d{4})") # iphone (SE 2020)
+    re_nef_base = re.compile(r".*(DSC_?\d{4}).*\.(NEF|nef)$")                  # Nikon
+    re_jpg_base_iphone = re.compile(r".*(IMG_\d{4}).*\.(JPG|JPEG|jpg|jpeg)$")    # iphone (SE 2020)
     return {NEF_BASE: re_nef_base, JPG_BASE_IPHONE: re_jpg_base_iphone}
 
-def process_nef():
-    print('Traiter NEF')
+def get_choices(dir: str, upcase: bool) -> dict:
+    """Return content of a dir as a dictionnary of choices"""
+    files = os.listdir(dir)
+    files.sort()
+    choice_list = dict()
+    id = 1
+    for file in files:
+        if upcase and not file.isupper():
+            continue
+        choice_list[str(id)] = file
+        id += 1
+    return choice_list
 
-def process_jpg():
-    print('Traiter JPEG')
+def display_choices(choices: dict):
+    """Displays choices given in a dictionnary"""
+    for key, choice in choices.items():
+        print(key+':', choice)
+
+def get_and_check_resp(valid_resp_list: list) -> str:
+    """Asks for response (choice) and checks it against list of valid response
+    """
+    resp = input(set_blue(CAT_CHOICE_MSG))
+    if not resp.upper() in valid_resp_list:
+        print(set_red(CHOICE_ERROR_MSG))
+        return ''
+    return resp.upper()
+
+def creates_valid_resp_list(length: int, new: List[str]) -> list:
+    """Creates valid responses list
+        length = number of numeric responses
+        new = others non-numeric responses to add (presently, only one possible)
+    """
+    valid_resp_list = [str(x+1) for x in range(length)]
+    valid_resp_list.append(new[0])  #TODO: allows for many additionnal non-numeric responses
+    return valid_resp_list
+
+def select_category() -> str:
+    """Select category where to save pictures"""
+    print(set_blue(EXISTING_CATEGORIES_MSG))
+    categories = get_choices(IMAGES_HOME, True)
+    valid_resp_list = creates_valid_resp_list(len(categories), ['N'])
+    categories['N'] = CREATE_NEW_CAT_MSG    # add possibility to create a new category
+    display_choices(categories)
+    resp_ok = ''
+    while True:
+        resp = get_and_check_resp(valid_resp_list)
+        if resp.upper() == 'N':
+            while not resp_ok.upper() == 'O':
+                msg = SELECT_CATEGORY_MESSAGES['INPUT_NEW_CAT_MSG']
+                new_category = input(set_blue(msg)).upper()
+                path_to_new_category = IMAGES_HOME+TEMP_DEV+new_category
+                if new_category in categories.values():
+                    msg = SELECT_CATEGORY_MESSAGES['CATEGORY_ALREADY_EXISTS_MSG']
+                    print(set_yellow(msg))
+                    return path_to_new_category
+                msg = SELECT_CATEGORY_MESSAGES['CREATE_CATEGORY_OK_MSG']
+                resp_ok_msg = msg + set_blue(IMAGES_HOME+new_category) +' ? '
+                resp_ok = input(resp_ok_msg)
+            # TODO: for development only, to be rewritten (no try/except stuff) in final version
+            try:
+                os.makedirs(path_to_new_category)
+            except FileExistsError:
+                pass
+            return path_to_new_category
+        else:
+            path_to_category = IMAGES_HOME+TEMP_DEV+categories[resp]
+            return (path_to_category)
+
+def select_dest_dir():
+    """Returns rep (within the proper category) to store renamed pictures"""
+    path_to_category = select_category()
+    choices = get_choices(path_to_category, False)
+    choices['N'] = CREATE_NEW_DIR_MSG
+    print(set_blue(SELECT_DEST_DIR_MSG))
+    display_choices(choices)
+
+def process_nef(file, base, ext):
+    """Rename NEF (Nikon) picture file including .xmp file if present"""
+    if not '_' in base:
+        base = '_'+base
+    exit()
+
+def process_jpg_iphone(file, base, ext):
+    """Rename JPEG picture file taken with an iphone (presently, SE 2020 model)"""
+    pass
 
 def do_processing(filters):
-    processes = {NEF_EXT: process_nef, JPG_EXT: process_jpg}
     """Figure out which types of pictures are presents"""
+    processes = {NEF_BASE: process_nef, JPG_BASE_IPHONE: process_jpg_iphone}
     all_files = os.listdir('.')
     all_files.sort()
     flag = False
     for file in all_files:
         for index in range(len(filters)):
-            if bool(filters[EXT_LIST[index]].match(file)):
-                processes[EXT_LIST[index]]()
-                flag = True
+            temp = filters[PICTURES_BASENAME_LIST[index]].findall(file)
+            if bool(temp):
+                if not flag:
+                    dest_rep = select_dest_dir()
+                    flag = True
+                base, ext = temp[0]
+                processes[PICTURES_BASENAME_LIST[index]](file, base, ext)
     if not flag:
         print('\033[0;31m Le répertoire ne contient pas de fichiers images\033[00m')
         exit(NO_PICTURE)
@@ -88,37 +175,12 @@ def rename_pictures():
     possible extensions are NEF and JPG/JPEG
     """
     select_directory()
-    ext_filters = create_ext_filters()
-    do_processing(ext_filters)
-
-    # (_?DSC_?\d{4}.*)\.((NEF)|(nef))$
+    base_filters = create_base_filters()
+    do_processing(base_filters)
 
     return
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # store them
-    pictures_file = []
-    for file in all_files:
-        if not bool(filters[ext_type].match(file)): # filtering
-            continue
-        pictures_file.append(file) # store
-    if not pictures_file:
-        print('Le répertoire ne contient aucun fichier', searched_ext, '!')
-        print('Vérifier le répertoire ainsi que le type de fichier image (nef ou jpeg)')
-        exit(NO_PICTURE) # no picture of type 'ext_type' in the folder -> exit
 
     # 2. create decade folder in STEP 2 of the workflow
     decade = start_folder.split('/')[-2]
