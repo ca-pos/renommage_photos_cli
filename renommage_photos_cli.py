@@ -5,6 +5,7 @@ from os.path import basename, splitext, abspath
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import PathCompleter
 from typing import List
+import exifread, string
 
 import re
 import exifread
@@ -12,7 +13,7 @@ import exifread
 from constants import *
 from set_colors import *
 
-def reject_filter(file):
+def reject_filter(file: str) -> bool:
     """ directories to be rejected: 'lost+found' and any hidden ones"""
     try:
         file.index('lost+found')
@@ -24,7 +25,7 @@ def reject_filter(file):
 
     return True
 
-def select_directory():
+def select_directory() -> str:
     """select directory containing to-be-renamed pictures"""
     images_home = IMAGES_HOME
     dir_ok = 'N'
@@ -44,20 +45,20 @@ def select_directory():
         all_files.sort()
         for file in all_files:
             print(file)
-        print('-----------------------------------------------')
+        print('-'*46)
         dir_ok = input(REP_OK_MSG)
-        print('-----------------------------------------------')
+        print('-'*46)
         if dir_ok == '':
             dir_ok = 'O'
     return images_path
 
-def create_ext_filters():
+def create_ext_filters() -> dict:
     """Creates filters for NEF and JP(E)G files. Returns a tuple of filters"""
     re_nef_ext = re.compile(r".*\.nef$", re.IGNORECASE)     # nef filter
     re_jpg_ext = re.compile(r".*\.jpe?g$", re.IGNORECASE)   # jpg filter
     return {NEF_EXT:re_nef_ext, JPG_EXT:re_jpg_ext}
 
-def create_base_filters():
+def create_base_filters() -> dict:
     """Creates filters for original from camera names (base names)"""
     re_nef_base = re.compile(r".*(DSC_?\d{4}).*\.(NEF|nef)$")                  # Nikon
     re_jpg_base_iphone = re.compile(r".*(IMG_\d{4}).*\.(JPG|JPEG|jpg|jpeg)$")    # iphone (SE 2020)
@@ -99,6 +100,37 @@ def creates_valid_resp_list(length: int, new: List[str]) -> list:
     valid_resp_list.append(new[0])  #TODO: allows for many additionnal non-numeric responses
     return valid_resp_list
 
+def process_response_loop(messages: dict, valid_resp_list: list, upcase:bool, root_path: str, items: dict):
+    resp_ok = ''
+    while True:
+        resp = get_and_check_resp(valid_resp_list)
+        if not resp:
+            continue
+        elif resp.upper() == 'N':
+            while not resp_ok.upper() == 'O':
+                msg = messages['INPUT_NEW_ITEM_MSG']
+                new_item = input(set_blue(msg))
+                if upcase:
+                    new_item = new_item.upper()
+                path_to_new_item = root_path+'/'+new_item
+                if new_item in items.values():
+                    msg = SELECT_DIRECTORY_MESSAGES['ITEM_ALREADY_EXISTS_MSG']
+                    print(set_yellow(msg))
+                    return path_to_new_item
+                msg = SELECT_DIRECTORY_MESSAGES['CREATE_ITEM_OK_MSG']
+                resp_ok_msg = msg+' '+set_blue(path_to_new_item) + ' (O/N, par défaut N) ? '
+                resp_ok = input(resp_ok_msg)
+            print('CRÉER '+ path_to_new_item)
+            try:
+                os.makedirs(path_to_new_item)
+            except FileExistsError:
+                print('FileExistsError')
+            return path_to_new_item
+        else:
+            path_to_item = root_path+'/'+items[resp]
+            print('CHOISIR '+path_to_item)
+            return path_to_item
+
 def select_category() -> str:
     """Select category where to save pictures"""
     print(set_blue(EXISTING_CATEGORIES_MSG))
@@ -106,55 +138,70 @@ def select_category() -> str:
     valid_resp_list = creates_valid_resp_list(len(categories), ['N'])
     categories['N'] = CREATE_NEW_CAT_MSG    # add possibility to create a new category
     display_choices(categories)
-    resp_ok = ''
-    while True:
-        resp = get_and_check_resp(valid_resp_list)
-        if resp.upper() == 'N':
-            while not resp_ok.upper() == 'O':
-                msg = SELECT_CATEGORY_MESSAGES['INPUT_NEW_CAT_MSG']
-                new_category = input(set_blue(msg)).upper()
-                path_to_new_category = IMAGES_HOME+TEMP_DEV+new_category
-                if new_category in categories.values():
-                    msg = SELECT_CATEGORY_MESSAGES['CATEGORY_ALREADY_EXISTS_MSG']
-                    print(set_yellow(msg))
-                    return path_to_new_category
-                msg = SELECT_CATEGORY_MESSAGES['CREATE_CATEGORY_OK_MSG']
-                resp_ok_msg = msg + set_blue(IMAGES_HOME+new_category) +' ? '
-                resp_ok = input(resp_ok_msg)
-            # TODO: for development only, to be rewritten (no try/except stuff) in final version
-            try:
-                os.makedirs(path_to_new_category)
-            except FileExistsError:
-                pass
-            return path_to_new_category
-        else:
-            path_to_category = IMAGES_HOME+TEMP_DEV+categories[resp]
-            return (path_to_category)
+    path_to_category = process_response_loop(SELECT_CATEGORY_MESSAGES, valid_resp_list, True, IMAGES_HOME+TEMP_DEV, categories)
+    return path_to_category
 
 def select_dest_dir():
     """Returns rep (within the proper category) to store renamed pictures"""
     path_to_category = select_category()
     choices = get_choices(path_to_category, False)
+    valid_resp_list = creates_valid_resp_list(len(choices), ['N'])
     choices['N'] = CREATE_NEW_DIR_MSG
     print(set_blue(SELECT_DEST_DIR_MSG))
     display_choices(choices)
+    dest_dir = process_response_loop(SELECT_DIRECTORY_MESSAGES, valid_resp_list, False, path_to_category, choices)
+    return dest_dir
 
-def process_nef(file, base, ext):
+def create_date_part_from_nef(file:str, modifier:str)->str:
+        months_as_letter = string.ascii_uppercase[0:12]
+        with open(file, 'rb') as img_file:
+            tags = exifread.process_file(img_file)
+            exif_date = str(tags['EXIF DateTimeOriginal'])
+            year = exif_date[0:4]
+            month = exif_date[5:7]
+            day = exif_date[8:10]
+            date = '-'.join([year, month, day])
+            i_month = int(month)
+            month_as_letter = months_as_letter[i_month-1:i_month]
+            compressed_date = year[-1]+month_as_letter+day
+            date_part = date+'_('+compressed_date+modifier+')'
+            return date_part
+
+def process_nef(file:str, base:str, modifier: str, file_num: int, description:str):
     """Rename NEF (Nikon) picture file including .xmp file if present"""
+    # (2019-12-13)_001__DSC8376-9L13_neige_gache_et_terrasse_est.NEF
+    abbrev_month = [x for x in range(12)]
     if not '_' in base:
         base = '_'+base
-    exit()
-
+    os.chdir('/home/camille/Images/tmp_nef_map')
+    date_part = create_date_part_from_nef(file, modifier)
+    tmp, ext = os.path.splitext(file)
+    
+    new_name = date_part + '_' + f"{file_num:03}" + '_[' + base +']_' + description + ext
+    print('nwnwnw', new_name)
+    
 def process_jpg_iphone(file, base, ext):
     """Rename JPEG picture file taken with an iphone (presently, SE 2020 model)"""
     pass
 
-def do_processing(filters):
+def get_description() -> str:
+    print(set_blue(PICTURE_DESCRIPTION_MSG))
+    description = input('> ')
+    if not description:
+        description = 'pas de description'
+    description = format_description(description)
+    return description
+
+def do_processing(filters: dict):
     """Figure out which types of pictures are presents"""
     processes = {NEF_BASE: process_nef, JPG_BASE_IPHONE: process_jpg_iphone}
     all_files = os.listdir('.')
     all_files.sort()
+    modifier = input(set_blue(INPUT_MODIFIER_MSG))
     flag = False
+    file_num = 1
+    description = get_description()
+    print(description)
     for file in all_files:
         for index in range(len(filters)):
             temp = filters[PICTURES_BASENAME_LIST[index]].findall(file)
@@ -163,10 +210,11 @@ def do_processing(filters):
                     dest_rep = select_dest_dir()
                     flag = True
                 base, ext = temp[0]
-                processes[PICTURES_BASENAME_LIST[index]](file, base, ext)
+                processes[PICTURES_BASENAME_LIST[index]](file, base, modifier, file_num, description)
+        file_num +=1
     if not flag:
-        print('\033[0;31m Le répertoire ne contient pas de fichiers images\033[00m')
-        exit(NO_PICTURE)
+        print(set_red(NO_PICTURE_MSG))
+        exit(NO_PICTURE_EXIT)
 
     return
 
@@ -193,22 +241,6 @@ def rename_pictures():
     new_directory = directory + '-' + g_name
     dest_folder = decade_step_2 + '/' + new_directory
     os.makedirs(dest_folder, exist_ok=True)
-
-    # 4. create the fixed parts of the new name of the picture file
-    # get the first file
-    file1 = pictures_file[0]
-    with open(file1, 'rb') as img_file:
-        # leading fixed part : date between parenthesis
-        tags = exifread.process_file(img_file)
-        exif_date = str(tags['EXIF DateTimeOriginal'])
-        year = exif_date[0:4]
-        month = exif_date[5:7]
-        day = exif_date[8:10]
-        date = '-'.join([year, month, day])
-        fixed_part_1 = '(' + date + ')_'
-        # trailing fixed part : new directory (see point 3 above) + ext (nef or jpg/jpeg)
-        original_ext = splitext(file1)[1].upper()
-        fixed_part_2 = '_' + new_directory + original_ext
 
     # 5. move picture files
     count = 0
@@ -246,16 +278,17 @@ def rename_pictures():
 
     return
 
-def suppress_spaces(string):
+def format_description(string: str) -> str:
     while string[0] == ' ':  # get rid of leading spaces
         string = string[1:len(string)]
-
     while string[len(string) - 1] == ' ':  # get rid of trailing spaces
         string = string[0:len(string) - 1]
-
     while string.find('  ') > 0:
         string = string.replace("  ", " ")  # replace double spaces with single space
-
+    while string.find(' ') > 0:
+        string = string.replace(' ', '_')   # replace spaces with underlines
+    while string.find('\'') > 0:
+        string = string.replace('\'', '_')  # replace apostrophes whith underlines
     return string
 
 def enter_group_name():
@@ -285,6 +318,8 @@ if __name__ == '__main__':
     # group_modifier = enter_modifier()
     # file_type =  enter_type()
     # move
+        # process_nef('(2019-12-13)_001__DSC8376-9L13_neige_gache_et_terrasse_est.NEF','_DSC8376','NEF')
+        # exit()
     rename_pictures()
 
     exit(0)
