@@ -2,14 +2,15 @@
 TEMP_DEV = 'tmp'
 #TEMP_DEV = ''
 
-IMAGES_HOME = '/home/camille/Images/'
+IMAGES_HOME = '/home/camille/Images/_Importation/PRÉ-TRI/'
 NEF_EXT = 'NEF'
 JPG_EXT = 'JPG'
 EXT_LIST = [NEF_EXT, JPG_EXT]
 
 NEF_BASE = 'NEF_BASE'
 JPG_BASE_IPHONE = 'JPG_BASE_IPHONE'
-PICTURES_BASENAME_LIST = [NEF_BASE, JPG_BASE_IPHONE]
+NONAME_BASE = 'NONAME_BASE'
+PICTURES_BASENAME_LIST = [NEF_BASE, JPG_BASE_IPHONE, NONAME_BASE]
 
 REP_OK_MSG = 'Est-ce le bon répertoire O/N (par défaut, O) ? '
 PICTURE_LIST_MSG = '\n\033[0;34m Le répertoire contient les fichiers suivants :\033[00m'
@@ -40,5 +41,7 @@ SELECT_DIRECTORY_MESSAGES = {'INPUT_NEW_ITEM_MSG': INPUT_NEW_DIR_MSG,
 NO_PICTURE_MSG = 'Le répertoire ne contient pas de fichiers images'
 
 NO_PICTURE_EXIT = 1
+
+PRE_SORT_DIR_ABS = '/home/camille/Images/_Importation/PRÉ-TRI'
 
 #CATEGORIES = {'1': 'EXERCICES', '2': 'BALADES'}

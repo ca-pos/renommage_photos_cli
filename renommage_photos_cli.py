@@ -25,32 +25,32 @@ def reject_filter(file: str) -> bool:
 
     return True
 
-def select_directory() -> str:
-    """select directory containing to-be-renamed pictures"""
-    images_home = IMAGES_HOME
-    dir_ok = 'N'
-    while not dir_ok.upper() == 'O':
-        os.chdir(images_home)
-        images_path = prompt(
-            "Répertoire : " + images_home,
-            completer=PathCompleter(only_directories=True,file_filter=reject_filter)
-        )
-        if images_path:
-            os.chdir(images_path)
-        else:
-            images_path = IMAGES_HOME
-        print(PICTURE_LIST_MSG)
-        print('-'*46)
-        all_files = os.listdir()
-        all_files.sort()
-        for file in all_files:
-            print(file)
-        print('-'*46)
-        dir_ok = input(REP_OK_MSG)
-        print('-'*46)
-        if dir_ok == '':
-            dir_ok = 'O'
-    return images_path
+# def select_directory() -> str:
+#     """select directory containing to-be-renamed pictures"""
+#     images_home = IMAGES_HOME+'/2010/6C26'
+#     dir_ok = 'N'
+#     while not dir_ok.upper() == 'O':
+#         os.chdir(images_home)
+#         images_path = prompt(
+#             "Répertoire : " + images_home,
+#             completer=PathCompleter(only_directories=True,file_filter=reject_filter)
+#         )
+#         if images_path:
+#             os.chdir(images_path)
+#         else:
+#             images_path = IMAGES_HOME
+#         print(PICTURE_LIST_MSG)
+#         print('-'*46)
+#         all_files = os.listdir()
+#         all_files.sort()
+#         for file in all_files:
+#             print(file)
+#         print('-'*46)
+#         dir_ok = input(REP_OK_MSG)
+#         print('-'*46)
+#         if dir_ok == '':
+#             dir_ok = 'O'
+#     return images_path
 
 def create_ext_filters() -> dict:
     """Creates filters for NEF and JP(E)G files. Returns a tuple of filters"""
@@ -60,9 +60,10 @@ def create_ext_filters() -> dict:
 
 def create_base_filters() -> dict:
     """Creates filters for original from camera names (base names)"""
-    re_nef_base = re.compile(r".*(DSC_?\d{4}).*\.(NEF|nef)$")                  # Nikon
-    re_jpg_base_iphone = re.compile(r".*(IMG_\d{4}).*\.(JPG|JPEG|jpg|jpeg)$")    # iphone (SE 2020)
-    return {NEF_BASE: re_nef_base, JPG_BASE_IPHONE: re_jpg_base_iphone}
+    re_nef_base = re.compile(r".*(DSC_?\d{4}).*\.(NEF|nef)$")                       # Nikon
+    re_jpg_base_iphone = re.compile(r".*(IMG_\d{4}).*\.(JPG|JPEG|jpg|jpeg)$")       # iphone (SE 2020)
+    re_noname_base = re.compile(r".*(XXX-\d{4}).*\.(JPG|JPEG|jpg|jpeg|NEF|nef)$")   # no known name
+    return {NEF_BASE: re_nef_base, JPG_BASE_IPHONE: re_jpg_base_iphone, NONAME_BASE: re_noname_base}
 
 def get_choices(dir: str, upcase: bool) -> dict:
     """Return content of a dir as a dictionnary of choices"""
@@ -184,6 +185,10 @@ def process_jpg_iphone(file, base, ext):
     """Rename JPEG picture file taken with an iphone (presently, SE 2020 model)"""
     pass
 
+def process_noname(file, base, ext):
+    """Rename picture taken with an unknown camera"""
+    pass
+
 def get_description() -> str:
     print(set_blue(PICTURE_DESCRIPTION_MSG))
     description = input('> ')
@@ -192,22 +197,31 @@ def get_description() -> str:
     description = format_description(description)
     return description
 
+def walk_through():
+    walk_return_lst = list(os.walk(os.getcwd()))
+    for f in walk_return_lst:
+        if f[2]:
+            print('...', f[2])
+
+
 def do_processing(filters: dict):
     """Figure out which types of pictures are presents"""
-    processes = {NEF_BASE: process_nef, JPG_BASE_IPHONE: process_jpg_iphone}
+    processes = {NEF_BASE: process_nef, JPG_BASE_IPHONE: process_jpg_iphone, NONAME_BASE: process_noname}
+    walk_through()
+    exit()
     all_files = os.listdir('.')
     all_files.sort()
     modifier = input(set_blue(INPUT_MODIFIER_MSG))
     flag = False
     file_num = 1
     description = get_description()
-    print(description)
     for file in all_files:
         for index in range(len(filters)):
             temp = filters[PICTURES_BASENAME_LIST[index]].findall(file)
             if bool(temp):
                 if not flag:
                     dest_rep = select_dest_dir()
+                    os.chdir(dest_rep)
                     flag = True
                 base, ext = temp[0]
                 processes[PICTURES_BASENAME_LIST[index]](file, base, modifier, file_num, description)
@@ -222,25 +236,10 @@ def rename_pictures():
     """
     possible extensions are NEF and JPG/JPEG
     """
-    select_directory()
+    os.chdir(PRE_SORT_DIR_ABS)
     base_filters = create_base_filters()
     do_processing(base_filters)
-
     return
-
-
-
-    # 2. create decade folder in STEP 2 of the workflow
-    decade = start_folder.split('/')[-2]
-    decade_step_2 = STEP_2 + '/' + decade
-    os.makedirs(decade_step_2, exist_ok=True)
-
-    # 3. create destination directory in step 2 of the workflow
-    #    (compressed date + modifier + name of the group of pictures)
-    directory = basename(start_folder) + modifier # compressed date
-    new_directory = directory + '-' + g_name
-    dest_folder = decade_step_2 + '/' + new_directory
-    os.makedirs(dest_folder, exist_ok=True)
 
     # 5. move picture files
     count = 0
@@ -291,33 +290,22 @@ def format_description(string: str) -> str:
         string = string.replace('\'', '_')  # replace apostrophes whith underlines
     return string
 
-def enter_group_name():
-    group_name = input("Nom du groupe de photos : ")
-    group_name = suppress_spaces(group_name).replace(" ", "-").lower()
-    return group_name
+# def enter_type():
+#         print("1. NEF")
+#         print("2. JPG/JPEG")
+#         f_type = " "
+#         while f_type not in ["", "1", "2"]:
+#             f_type = input("Type de fichiers [par défaut, 1] : ")
+#             if f_type == "":
+#                 f_type = "1"
 
-def enter_type():
-        print("1. NEF")
-        print("2. JPG/JPEG")
-        f_type = " "
-        while f_type not in ["", "1", "2"]:
-            f_type = input("Type de fichiers [par défaut, 1] : ")
-            if f_type == "":
-                f_type = "1"
+#         return int(f_type)-1
 
-        return int(f_type)-1
-
-def enter_modifier():
-    return input('Lettre à ajouter (entrée si aucune) :')
-
+# def enter_modifier():
+#     return input('Lettre à ajouter (entrée si aucune) :')
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # enter parameters
-    # group_name = 'le_héron' #enter_group_name()
-    # group_modifier = enter_modifier()
-    # file_type =  enter_type()
-    # move
         # process_nef('(2019-12-13)_001__DSC8376-9L13_neige_gache_et_terrasse_est.NEF','_DSC8376','NEF')
         # exit()
     rename_pictures()
